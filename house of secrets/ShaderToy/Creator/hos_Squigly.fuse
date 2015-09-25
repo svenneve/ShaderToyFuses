@@ -1,0 +1,187 @@
+--[[
+
+    OpenCL Squigly.
+
+    This is a ShaderToy conversion of Squigly by ShaderToy user Gijs.
+    https://www.shadertoy.com/view/MtBSWR
+
+    Conversion done by S.Neve / House of Secrets.
+
+    The original ShaderToy shader is licensed under the
+    Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License
+    
+]]--
+
+FuRegisterClass("hos_Squigly", CT_SourceTool, {
+    REGS_Name = "Squigly",
+    REGS_Category = "House of Secrets\\ShaderToy\\Creator",
+    REGS_OpIconString = "STsq",
+    REGS_OpDescription = "OpenCL Squigly Fuse",
+
+    REG_Source_GlobalCtrls = true,
+    REG_Source_SizeCtrls = true,
+    REG_Source_AspectCtrls = true,
+    REG_Source_DepthCtrls = true,
+    REG_SupportsDoD = true,
+    REG_NoPreCalcProcess = true,
+    })
+
+
+clsource =
+[[
+
+#define Tau (2.*M_PI_F)
+//Colors
+#define Color_BackGround (float3)( 34,  30,  38)/256.
+#define Color_Ring1      (float3)( 10, 205, 203)/256.
+#define Color_Ring2      (float3)( 46,  72,  82)/256.
+#define Color_Ring3      (float3)( 54, 147, 147)/256.
+
+kernel void Squigly(FuWriteImage_t dst,
+                            const int2 size,
+                            const float iGlobalTime)
+{
+    const int2 ipos = (int2)(get_global_id(1), get_global_id(0));
+    float2 fragCoord = convert_float(ipos);
+    float2 iResolution = convert_float(size);
+    
+    //Scaling
+    float2 Scaled = (fragCoord*2.-iResolution)/iResolution.y*.6;
+    
+    //Info
+    float Length = length(Scaled);
+    float Angle  = atan2(Scaled.y,Scaled.x)+M_PI_F;//[-Pi,Pi]->[0,2Pi]
+    float Wave = fmod(iGlobalTime*2.,Tau);//[0,2Pi]
+    
+    //Background
+    float3 Color = Color_BackGround;  
+
+    //Calculating
+    float AngleDifference = fabs(Wave-Angle);
+    float DistanceToWave  = min(AngleDifference,Tau-AngleDifference);
+    float FinalMultiplier = pow(max(1.,DistanceToWave),-4.);
+    
+    float Ring1 = .50  + 0.03*cos(Angle*7.       )*FinalMultiplier;
+    float Ring2 = .485 + 0.03*cos(Angle*7.+Tau/3.)*FinalMultiplier;
+    float Ring3 = .47  + 0.03*cos(Angle*7.-Tau/3.)*FinalMultiplier;
+    
+    //Drawing
+    if(fabs(Ring3-Length)<.01){
+        Color = Color_Ring3;
+    }
+    if(fabs(Ring2-Length)<.01){
+        Color = Color_Ring2;
+    }
+    if(fabs(Ring1-Length)<.01){
+        Color = Color_Ring1;
+    }     
+    
+    //Final
+    //fragColor = (Color,1.0);
+    FuWriteImagef(dst, ipos, size, (float4)(Color,1.0));
+}
+]]
+
+function Create()
+    InTimeMultiplier = self:AddInput("Time Multiplier", "TimeMultiplier", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        })
+    OutImage = self:AddOutput("Output", "Output", {
+        LINKID_DataType = "Image",
+        LINK_Main = 1,
+        })                
+
+    mgr = OCLManager()
+    if mgr then
+        prog = mgr:BuildCachedProgram(self.RegNode, clsource)
+    end
+end
+
+-- function OnAddToFlow()
+    -- mgr = OCLManager()
+    -- if mgr then
+        -- local path = string.sub(debug.getinfo(1).source, 2)
+        -- prog = mgr:BuildCachedProgram("SourceTemplate", path, clsource)
+    -- end
+-- end
+
+function Process(req)
+    local timemultiplier = InTimeMultiplier:GetValue(req).Value
+    local _time = req.Time * timemultiplier;
+    
+    if mgr.SupportsImages == false then
+        SourceDepth = 8            -- force to float32
+    end
+
+    local realwidth = Width;
+    local realheight = Height;
+
+    -- We'll handle proxy ourselves
+    Width = Width / Scale
+    Height = Height / Scale
+    Scale = 1
+
+    local imgattrs = {
+        IMG_Document = self.Comp,
+        IMG_Width = Width,
+        IMG_Height = Height,
+        IMG_XScale = XAspect,
+        IMG_YScale = YAspect,
+        IMAT_OriginalWidth = realwidth,
+        IMAT_OriginalHeight = realheight,
+        IMG_Quality = not req:IsQuick(),
+        IMG_MotionBlurQuality = not req:IsNoMotionBlur(),
+        }
+    
+    if not req:IsStampOnly() then
+        imgattrs.IMG_ProxyScale = 1
+    end
+    
+    if SourceDepth ~= 0 then
+        imgattrs.IMG_Depth = SourceDepth
+    end
+    
+    local img = Image(imgattrs)
+    local out
+
+    if req:IsPreCalc() then
+        out = img
+    elseif prog and img then
+        local climg = prog:CreateImage(img, "readwrite")
+        if climg then
+            -- create image
+            local kernel = prog:CreateKernel("Squigly")
+
+            if kernel then
+                prog:SetArg(kernel, 0, climg)
+                prog:SetArgInt(kernel, 1, Width, Height)
+                prog:SetArg(kernel, 2, _time)
+                -- prog:SetWorkgroupSize(64)
+
+
+                -- if prog:Download(climg, img) then
+                    -- out = img
+                -- end
+                prog:RunKernel(kernel)
+                if self.Status then
+                    prog:Download(climg, img)
+                    out = img
+                end
+            end
+            if climg then
+                climg:ReleaseCLObject()
+            end
+        end
+    end
+
+
+    local te = TimeExtent()
+    if timemultiplier > 0.0 then
+    te = TimeExtent(req.Time, req.Time, TIME_UNDEFINED)
+    end
+
+    req:SetOutputData(OutImage, out, te)
+    -- OutImage:Set(req, out)
+end

@@ -1,0 +1,150 @@
+--[[
+
+    OpenCL Hexagon Pixels.
+
+    This is a ShaderToy conversion of the Hexagon Pixels by ShaderToy user JoshuaBatty.
+    https://www.shadertoy.com/view/lsBGWz
+
+    Conversion done by S.Neve / House of Secrets.
+
+    The original ShaderToy shader is licensed under the
+    Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License
+    
+]]--
+
+FuRegisterClass("hos_HexagonPixels", CT_Tool, {
+    REGS_Name = "Hexagon Pixels",
+	REGS_Category = "House of Secrets\\ShaderToy\\Effect",
+	REGS_OpIconString = "SThp",
+	REGS_OpDescription = "OpenCL Hexagon Pixels Fuse",
+	})
+
+
+clsource = _OpenCL [[
+//Just porting accorss some code from this site. 
+// http://coding-experiments.blogspot.com.au/2010/06/pixelation.html
+
+#define H 0.032
+#define S ((3./2.) * H/sqrt(3.))
+
+float2 hexCoord(float2 hexIndex) {
+	float i = hexIndex.x;
+	float j = hexIndex.y;	
+	float2 r;
+	r.x = i * S;
+	r.y = j * H + (fmod(i,2.0)) * H/2.;
+	return r;
+}
+
+float2 hexIndex(float2 coord) {
+	float2 r;
+	float x = coord.x;
+	float y = coord.y;
+	float it = (float)(floor(x/S));
+	float yts = y - (fmod(it,2.0)) * H/2.;
+	float jt = (float)(floor((1./H) * yts));
+	float xt = x - it * S;
+	float yt = yts - jt * H;
+	float deltaj = (yt > H/2.)? 1.0:0.0;
+	float fcond = S * (2./3.) * fabs(0.5 - yt/H);
+
+	if (xt > fcond) {
+		r.x = it;
+		r.y = jt;
+	}
+	else {
+		r.x = it - 1.0;
+		r.y = jt - (fmod(r.x,2.0)) + deltaj;
+	}
+
+	return r;
+}
+
+kernel void HexagonPixels( FuReadImage_t inimg,
+                            FuWriteImage_t outimg,
+                            const int2 size,
+                            const float steps)
+{
+    const int2 ipos = (int2)(get_global_id(1), get_global_id(0));
+    float2 fragCoord = convert_float2(ipos) + (0.5, 0.5); // OpenGL fragCoords.xy return pixel centers, hence the offset here.
+    float2 iResolution = convert_float2(size);
+	float2 uv = fragCoord / iResolution;
+	float2 hexIx = hexIndex(uv);
+	float2 hexXy = hexCoord(hexIx);
+	float4 fcol = FuReadImagef(inimg, convert_int2(hexXy * iResolution), size); // hexCoord returns texture sampler coords (0..1), so we multiply the result with the image size as we're just reading pixel data, not sampling.
+
+    FuWriteImagef(outimg, ipos, size, fcol);
+}
+]]
+
+function Create()
+	InSteps = self:AddInput("Steps", "Steps", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_Default = 80.0,
+        INP_MinScale = 1,
+        INP_MaxScale = 160,
+        INP_MinAllowed = 1,
+        INP_Integer = true,
+		})
+        
+	InImage = self:AddInput("Image", "Image", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})
+        
+	OutImage = self:AddOutput("Output", "Output", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})				
+
+	mgr = OCLManager()
+	if mgr then
+		prog = mgr:BuildCachedProgram(self.RegNode, clsource)
+	end
+end
+
+-- function OnAddToFlow()
+	-- mgr = OCLManager()
+	-- if mgr then
+		-- local path = string.sub(debug.getinfo(1).source, 2)
+		-- prog = mgr:BuildCachedProgram("SourceTemplate", path, clsource)
+	-- end
+-- end
+
+function Process(req) 
+	local steps = InSteps:GetValue(req).Value
+	local inimg = InImage:GetValue(req)
+	local img = Image{ IMG_Like = inimg }
+	local out
+
+	if img and prog then
+		local incl = prog:CreateImage(inimg, "read")
+		local outcl = prog:CreateImage(img, "write")
+		if incl and outcl then
+			local kernel = prog:CreateKernel("HexagonPixels")
+
+			if kernel then
+				prog:SetArg(kernel, 0, incl)
+				prog:SetArg(kernel, 1, outcl)
+				prog:SetArgInt(kernel, 2, inimg.Width, inimg.Height)
+                prog:SetArg(kernel, 3, steps)
+				--prog:SetWorkgroupSize(64)
+
+                prog:RunKernel(kernel)
+				if self.Status then
+					prog:Download(outcl, img)
+					out = img
+				end
+            end
+            if incl then
+                incl:ReleaseCLObject()
+            end
+            if outcl then
+                outcl:ReleaseCLObject()
+            end
+		end
+	end
+    
+    OutImage:Set(req, out)
+end

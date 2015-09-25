@@ -1,0 +1,171 @@
+--[[
+
+    OpenCL Hexagon Sampler.
+
+    This is a ShaderToy conversion of the Hexagon Sampler by ShaderToy user pyalot.
+    https://www.shadertoy.com/view/ls23Dc
+
+    Conversion done by S.Neve / House of Secrets.
+
+    The original ShaderToy shader is licensed under the
+    Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License
+    
+]]--
+
+FuRegisterClass("hos_HexagonSampler", CT_Tool, {
+    REGS_Name = "Hexagon Sampler",
+	REGS_Category = "House of Secrets\\ShaderToy\\Effect",
+	REGS_OpIconString = "SThs",
+	REGS_OpDescription = "OpenCL Hexagon Sampler Fuse",
+	})
+
+
+clsource = _OpenCL [[
+float hexDist(float2 a, float2 b){
+    float deg30 = 0.52359877559; //(2.0 * M_PI_F) / 12.0; // cached for optimization.
+
+	float2 p = fabs(b-a);
+	float s = sin(deg30);
+	float c = cos(deg30);
+	
+	float diagDist = s*p.x + c*p.y;
+	return max(diagDist, p.x)/c;
+}
+
+float2 nearestHex(float s, float2 st){
+    float deg30 = 0.52359877559; //(2.0 * M_PI_F) / 12.0; // cached for optimization.
+	float h = sin(deg30)*s;
+	float r = cos(deg30)*s;
+	float b = s + 2.0*h;
+	float a = 2.0*r;
+	float m = h/r;
+
+	float2 sect = st/(float2)(2.0*r, h+s);
+	float2 sectPxl = fmod(st, (float2)(2.0*r, h+s));
+	
+	float aSection = fmod(floor(sect.y), 2.0);
+	
+	float2 coord = floor(sect);
+	if(aSection > 0.0){
+		if(sectPxl.y < (h-sectPxl.x*m)){
+			coord -= 1.0;
+		}
+		else if(sectPxl.y < (-h + sectPxl.x*m)){
+			coord.y -= 1.0;
+		}
+
+	}
+	else{
+		if(sectPxl.x > r){
+			if(sectPxl.y < (2.0*h - sectPxl.x * m)){
+				coord.y -= 1.0;
+			}
+		}
+		else{
+			if(sectPxl.y < (sectPxl.x*m)){
+				coord.y -= 1.0;
+			}
+			else{
+				coord.x -= 1.0;
+			}
+		}
+	}
+	
+	float xoff = fmod(coord.y, 2.0)*r;
+	return (float2)(coord.x*2.0*r-xoff, coord.y*(h+s))+(float2)(r*2.0, s);
+}
+
+kernel void HexagonSampler( FuReadImage_t inimg,
+                            FuWriteImage_t outimg,
+                            const int2 size,
+                            const float steps)
+{
+    const int2 ipos = (int2)(get_global_id(1), get_global_id(0));
+    float2 fragCoord = convert_float2(ipos) + (0.5, 0.5); // OpenGL fragCoords.xy return pixel centers, hence the offset here.
+    float2 iResolution = convert_float2(size);
+	float2 uv = fragCoord / iResolution;
+	float s = iResolution.x / steps;
+	float2 nearest = nearestHex(s, fragCoord);
+	float4 texel = FuReadImagef(inimg, convert_int2(nearest), size); // we're not sampling, just reading, so no need to convert the positions to 0..1 range
+	float dist = hexDist(fragCoord, nearest);
+	
+	float luminance = (texel.x + texel.y + texel.z)/3.0;
+	float interiorSize = s;
+	float interior = 1.0 - smoothstep(interiorSize - 1.0, interiorSize, dist);
+	float4 fragColor = (float4)(texel.xyz*interior, 1.0);
+
+    FuWriteImagef(outimg, ipos, size, fragColor);
+}
+]]
+
+function Create()
+	InSteps = self:AddInput("Steps", "Steps", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_Default = 80.0,
+        INP_MinScale = 1,
+        INP_MaxScale = 160,
+        INP_MinAllowed = 1,
+        INP_Integer = true,
+		})
+        
+	InImage = self:AddInput("Image", "Image", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})
+        
+	OutImage = self:AddOutput("Output", "Output", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})				
+
+	mgr = OCLManager()
+	if mgr then
+		prog = mgr:BuildCachedProgram(self.RegNode, clsource)
+	end
+end
+
+-- function OnAddToFlow()
+	-- mgr = OCLManager()
+	-- if mgr then
+		-- local path = string.sub(debug.getinfo(1).source, 2)
+		-- prog = mgr:BuildCachedProgram("SourceTemplate", path, clsource)
+	-- end
+-- end
+
+function Process(req) 
+	local steps = InSteps:GetValue(req).Value
+	local inimg = InImage:GetValue(req)
+	local img = Image{ IMG_Like = inimg }
+	local out
+
+	if img and prog then
+		local incl = prog:CreateImage(inimg, "read")
+		local outcl = prog:CreateImage(img, "write")
+		if incl and outcl then
+			local kernel = prog:CreateKernel("HexagonSampler")
+
+			if kernel then
+				prog:SetArg(kernel, 0, incl)
+				prog:SetArg(kernel, 1, outcl)
+				prog:SetArgInt(kernel, 2, inimg.Width, inimg.Height)
+                prog:SetArg(kernel, 3, steps)
+				--prog:SetWorkgroupSize(64)
+
+                prog:RunKernel(kernel)
+				if self.Status then
+					prog:Download(outcl, img)
+					out = img
+				end
+            end
+            if incl then
+                incl:ReleaseCLObject()
+            end
+            if outcl then
+                outcl:ReleaseCLObject()
+            end
+		end
+	end
+    
+    OutImage:Set(req, out)
+end
