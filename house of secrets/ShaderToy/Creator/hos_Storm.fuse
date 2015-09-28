@@ -29,6 +29,12 @@ FuRegisterClass("hos_Storm", CT_SourceTool, {
 
 clsource =
 [[
+
+// OpenCL fmod = x - y * trunc (x/y)
+// OpenCL fract = fmin( x - floor(x), 0x1.fffffep-1f ). floor(x) is returned in iptr.
+// GLSL mod = x - y * floor (x/y)
+// GLSL fract = x - floor(x);
+
 float2 uvf( float2 uv )
 {
     uv = fmod(uv, 1.0f); // We need to make sure uv coordinates wrap around (0..1) to prevent the FuImageSample from returning either clamped edge pixels or black pixels (there seems to be no wrap or mirror version of the FuImageSampler.)
@@ -39,6 +45,7 @@ float2 uvf( float2 uv )
 // Created by inigo quilez - iq/2013
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 
+// OpenCL on Nvidia does not allow for overloading, so we'll need to change the noise function names.
 //float noise( in vec2 x )
 float noise2( float2 x, FuReadImage_t iChannel0, int2 iChannelResolution  )
 {
@@ -60,9 +67,9 @@ float noise3( float3 x, FuReadImage_t iChannel0, int2 iChannelResolution  )
     float3 i3;
     float3 p = floor(x);
     float3 f = fract(x, &i3);
-	f = f*f*(3.0-2.0*f);
+	f = f*f*(3.0f-2.0f*f);
 	
-	float2 uv = (p.xy+(float2)(37.0,17.0)*p.z) + f.xy;
+	float2 uv = (p.xy+(float2)(37.0f,17.0f)*p.z) + f.xy;
 	//float2 rg = texture2D( iChannel0, (uv+ 0.5)/256.0, -100.0 ).yx;
 	//float2 rg = FuSampleImageCf( iChannel0, (uv+ 0.5)/256.0, iChannelResolution ).yx;
     float2 i2;
@@ -75,7 +82,7 @@ float noise3( float3 x, FuReadImage_t iChannel0, int2 iChannelResolution  )
 float hash( float n )
 {
     float i1;
-    return fract(sin(n)*43758.5453, &i1);
+    return fract(sin(n)*43758.5453f, &i1);
 }
 
 // coulds
@@ -84,54 +91,54 @@ float4 map( float3 p, float2 ani, FuReadImage_t iChannel0, int2 iChannelResoluti
 {
 	float3 r = p;
 	
-	float h = (0.7+0.3*ani.x) * noise2( 0.76*r.xz, iChannel0, iChannelResolution );
+	float h = (0.7f+0.3f*ani.x) * noise2( 0.76f*r.xz, iChannel0, iChannelResolution );
 	r.y -= h;
 	
-	float den = -(r.y + 2.5);
-	r +=  0.2*(float3)(0.0,0.0,1.0)*ani.y;
+	float den = -(r.y + 2.5f);
+	r +=  0.2f*(float3)(0.0f,0.0f,1.0f)*ani.y;
 		
-	float3 q = 2.5*r*(float3)(1.0,1.0,0.15)    + (float3)(1.0,1.0,1.0)*ani.y*0.15;
+	float3 q = 2.5f*r*(float3)(1.0f,1.0f,0.15f)    + (float3)(1.0f,1.0f,1.0f)*ani.y*0.15f;
 	float f;
-    f  = 0.50000*noise3( q, iChannel0, iChannelResolution ); q = q*2.02 - (float3)(-1.0,1.0,-1.0)*ani.y*0.15;
-    f += 0.25000*noise3( q, iChannel0, iChannelResolution ); q = q*2.03 + (float3)(1.0,-1.0,1.0)*ani.y*0.15;
-    f += 0.12500*noise3( q, iChannel0, iChannelResolution ); q = q*2.01 - (float3)(1.0,1.0,-1.0)*ani.y*0.15;
-    q.z *= 4.0;
-    f += 0.06250*noise3( q, iChannel0, iChannelResolution ); q = q*2.02 + (float3)(1.0,1.0,1.0)*ani.y*0.15;
-    f += 0.03125*noise3( q, iChannel0, iChannelResolution );
+    f  = 0.50000f*noise3( q, iChannel0, iChannelResolution ); q = q*2.02f - (float3)(-1.0f,1.0f,-1.0f)*ani.y*0.15f;
+    f += 0.25000f*noise3( q, iChannel0, iChannelResolution ); q = q*2.03f + (float3)(1.0f,-1.0f,1.0f)*ani.y*0.15f;
+    f += 0.12500f*noise3( q, iChannel0, iChannelResolution ); q = q*2.01f - (float3)(1.0f,1.0f,-1.0f)*ani.y*0.15f;
+    q.z *= 4.0f;
+    f += 0.06250f*noise3( q, iChannel0, iChannelResolution ); q = q*2.02f + (float3)(1.0f,1.0f,1.0f)*ani.y*0.15f;
+    f += 0.03125f*noise3( q, iChannel0, iChannelResolution );
 	
-    float es = 	1.0-clamp( (r.y+1.0)/0.26,0.0,1.0);
-    f += f*(1.0-f)*0.6*sin(q.z)*es;	
-	den = clamp( den + 4.4*f, 0.0, 1.0 );
+    float es = 	1.0f-clamp( (r.y+1.0f)/0.26f,0.0f,1.0f);
+    f += f*(1.0f-f)*0.6f*sin(q.z)*es;	
+	den = clamp( den + 4.4f*f, 0.0f, 1.0f );
 
     // color	
-	float3 col = mix( (float3)(0.2,0.3,0.3), (float3)(1.0,1.0,1.0), clamp( (r.y+2.5)/3.0,0.0,1.0) );
-    col = mix( col, 3.0*(float3)(1.0,1.1,1.20)*(0.2+0.8*ani.x), es );
-	col *= mix( (float3)(0.1,0.32,0.38), (float3)(1.05,0.95,0.75), f*1.2 );
-    col = col*(0.8-0.5*ani.x) + ani.x*2.0*smoothstep(0.75,0.86,sin(10.0*ani.y+2.0*r.z + r.x*10.0))*smoothstep(0.6,0.8,f)*(float3)(1.0,0.8,0.5)*smoothstep( 0.7, 0.9, noise2(q.yx, iChannel0, iChannelResolution) );
+	float3 col = mix( (float3)(0.2f,0.3f,0.3f), (float3)(1.0f,1.0f,1.0f), clamp( (r.y+2.5f)/3.0f,0.0f,1.0f) );
+    col = mix( col, 3.0f*(float3)(1.0f,1.1f,1.20f)*(0.2f+0.8f*ani.x), es );
+	col *= mix( (float3)(0.1f,0.32f,0.38f), (float3)(1.05f,0.95f,0.75f), f*1.2f );
+    col = col*(0.8f-0.5f*ani.x) + ani.x*2.0f*smoothstep(0.75f,0.86f,sin(10.0f*ani.y+2.0f*r.z + r.x*10.0f))*smoothstep(0.6f,0.8f,f)*(float3)(1.0f,0.8f,0.5f)*smoothstep( 0.7f, 0.9f, noise2(q.yx, iChannel0, iChannelResolution) );
 	
 	return (float4)( col, den );
 }
 
 // light direction
 //vec3 lig = normalize((float3)(-1.0,1.0,-1.0));
-__constant static float3 lig = (float3)(-0.57735026919,0.57735026919,-0.57735026919);
+__constant static float3 lig = (float3)(-0.57735026919f,0.57735026919f,-0.57735026919f);
 		
 //vec3 raymarch( in vec3 ro, in vec3 rd, in vec2 ani, in vec2 pixel )        
 float3 raymarch( float3 ro, float3 rd, float2 ani, float2 pixel, FuReadImage_t iChannel0, int2 iChannelResolution )
 {
     // background color	
-	float3 bgc = (float3)(0.6,0.7,0.7) + 0.3*rd.y;
-    bgc *= 0.2;
+	float3 bgc = (float3)(0.6f,0.7f,0.7f) + 0.3f*rd.y;
+    bgc *= 0.2f;
     
     // dithering	
-	//float t = 0.03*texture2D( iChannel0, pixel.xy/iChannelResolution[0].x ).x;
-	float t = 0.03*FuSampleImageCf( iChannel0, uvf(pixel.xy/iChannelResolution.x), iChannelResolution ).x;
+	//float t = 0.03f*texture2D( iChannel0, pixel.xy/iChannelResolution[0].x ).x;
+	float t = 0.03f*FuSampleImageCf( iChannel0, uvf(pixel.xy/iChannelResolution.x), iChannelResolution ).x;
 
     // raymarch	
-	float4 sum = (float4)( 0.0 );
+	float4 sum = (float4)( 0.0f );
 	for( int i=0; i<150; i++ )
 	{
-		if( sum.w > 0.99 ) continue;
+		if( sum.w > 0.99f ) continue;
 		
 		float3 pos = ro + t*rd;
 		//float4 col = map( pos, ani );
@@ -139,23 +146,23 @@ float3 raymarch( float3 ro, float3 rd, float2 ani, float2 pixel, FuReadImage_t i
 
         // lighting		
 		//float dif = 0.1 + 0.4*(col.w - map( pos + lig*0.15, ani ).w);
-		float dif = 0.1 + 0.4*(col.w - map( pos + lig*0.15, ani, iChannel0, iChannelResolution ).w);
+		float dif = 0.1f + 0.4f*(col.w - map( pos + lig*0.15f, ani, iChannel0, iChannelResolution ).w);
 		col.xyz += dif;
 
         // fog		
-		col.xyz = mix( col.xyz, bgc, 1.0-exp(-0.005*t*t) );
+		col.xyz = mix( col.xyz, bgc, 1.0f-exp(-0.005f*t*t) );
 		
 		col.xyz *= col.w;
-		sum = sum + col*(1.0 - sum.w);	
+		sum = sum + col*(1.0f - sum.w);	
 
         // advance ray with LOD
-		t += 0.03+t*0.012;
+		t += 0.03f+t*0.012f;
 	}
 
     // blend with background	
-	sum.xyz = mix( bgc, sum.xyz/(sum.w+0.0001), sum.w );
+	sum.xyz = mix( bgc, sum.xyz/(sum.w+0.0001f), sum.w );
 	
-	return clamp( sum.xyz, 0.0, 1.0 );
+	return clamp( sum.xyz, 0.0f, 1.0f );
 }
 
 
@@ -172,7 +179,7 @@ kernel void Storm(  FuWriteImage_t dst,
     float4 iMouse = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
     
 	float2 q = fragCoord.xy / iResolution.xy;
-    float2 p = -1.0 + 2.0*q;
+    float2 p = -1.0f + 2.0f*q;
     p.x *= iResolution.x / iResolution.y;
 	
     //float2 mo = iMouse.xy / iResolution.xy;
@@ -181,50 +188,50 @@ kernel void Storm(  FuWriteImage_t dst,
 	float time = iGlobalTime;
 	
 	float2 ani = (float2)(1.0f, 1.0f);
-	float ati = time/17.0;
-	float pt = fmod( ati, 2.0 );
-	ani.x = smoothstep( 0.3, 0.7, pt ) - smoothstep( 1.3, 1.7, pt );
-	float it = floor( 0.75 + ati*0.5 + 0.1 );
+	float ati = time/17.0f;
+	float pt = fmod( ati, 2.0f );
+	ani.x = smoothstep( 0.3f, 0.7f, pt ) - smoothstep( 1.3f, 1.7f, pt );
+	float it = floor( 0.75f + ati*0.5f + 0.1f );
     float i;
-	float ft = fract( 0.75 + ati*0.5 + 0.1 , &i);
-	ft = smoothstep( 0.0, 0.6, ft );
-	ani.y = time*0.15 + 30.0*(it + ft); 
+	float ft = fract( 0.75f + ati*0.5f + 0.1f , &i);
+	ft = smoothstep( 0.0f, 0.6f, ft );
+	ani.y = time*0.15f + 30.0f*(it + ft); 
 	
 	// camera parameters
 	//vec4 camPars = texture2D( iChannel0, floor(1.0+iGlobalTime/5.5)*vec2(5.0,7.0)/iChannelResolution[0].xy );
-	float4 camPars = FuSampleImageCf( iChannel0, uvf(floor(1.0+iGlobalTime/5.5)*(float2)(5.0,7.0)/convert_float2(iChannelResolution)), iChannelResolution );
+	float4 camPars = FuSampleImageCf( iChannel0, uvf(floor(1.0f+iGlobalTime/5.5f)*(float2)(5.0f,7.0f)/convert_float2(iChannelResolution)), iChannelResolution );
 	
     // camera position
-    float3 ro = 4.0*normalize((float3)(cos(30.0*camPars.x + 0.023*time), 0.3+0.2*sin(30.0*camPars.x + 0.08*time), sin(30.0*camPars.x + 0.023*iGlobalTime)));
-	float3 ta = (float3)(0.0, 0.0, 0.0);
-	float cr = 0.25*cos(30.0*camPars.y + 0.1*time);
+    float3 ro = 4.0f*normalize((float3)(cos(30.0f*camPars.x + 0.023f*time), 0.3f+0.2f*sin(30.0f*camPars.x + 0.08f*time), sin(30.0f*camPars.x + 0.023f*iGlobalTime)));
+	float3 ta = (float3)(0.0f, 0.0f, 0.0f);
+	float cr = 0.25f*cos(30.0f*camPars.y + 0.1f*time);
 
     // shake		
 	//ro += ani.x*ani.x*0.05*(-1.0+2.0*F( iChannel0, 1.035*time*(float2)(0.010,0.014) ).xyz);
 	//ta += ani.x*ani.x*0.20*(-1.0+2.0*texture2D( iChannel0, 1.035*time*(float2)(0.013,0.008) ).xyz);
-    ro += ani.x*ani.x*0.05*(-1.0+2.0*FuSampleImageCf( iChannel0, uvf(1.035*time*(float2)(0.010,0.014)), iChannelResolution ).xyz);
-	ta += ani.x*ani.x*0.20*(-1.0+2.0*FuSampleImageCf( iChannel0, uvf(1.035*time*(float2)(0.013,0.008)), iChannelResolution ).xyz);
+    ro += ani.x*ani.x*0.05f*(-1.0f+2.0f*FuSampleImageCf( iChannel0, uvf(1.035f*time*(float2)(0.010f,0.014f)), iChannelResolution ).xyz);
+	ta += ani.x*ani.x*0.20f*(-1.0f+2.0f*FuSampleImageCf( iChannel0, uvf(1.035f*time*(float2)(0.013f,0.008f)), iChannelResolution ).xyz);
 
 	
 	// build ray
     float3 ww = normalize( ta - ro);
-    float3 uu = normalize(cross( (float3)(sin(cr),cos(cr),0.0), ww ));
+    float3 uu = normalize(cross( (float3)(sin(cr),cos(cr),0.0f), ww ));
     float3 vv = normalize(cross(ww,uu));
-    float3 rd = normalize( p.x*uu + p.y*vv + (2.5 + 3.5*pow(camPars.z,2.0))*ww );
+    float3 rd = normalize( p.x*uu + p.y*vv + (2.5f + 3.5f*pow(camPars.z,2.0f))*ww );
 	
     // raymarch	
 	//vec3 col = raymarch( ro, rd, ani, fragCoord );
 	float3 col = raymarch( ro, rd, ani, fragCoord, iChannel0, iChannelResolution );
 	
 	// contrast, saturation and vignetting	
-	col = col*col*(3.0-2.0*col);
-    col = mix( col, (float3)(dot(col,(float3)(0.33, 0.33, 0.33))), -0.5 );
-	col *= 0.25 + 0.75*pow( 16.0*q.x*q.y*(1.0-q.x)*(1.0-q.y), 0.1 );
+	col = col*col*(3.0f-2.0f*col);
+    col = mix( col, (float3)(dot(col,(float3)(0.33f, 0.33f, 0.33f))), -0.5f );
+	col *= 0.25f + 0.75f*pow( 16.0f*q.x*q.y*(1.0f-q.x)*(1.0f-q.y), 0.1f );
 	
 	// fragColor = vec4( col, 1.0 );
-    col *= 1.0-smoothstep( 0.4, 0.5, fabs(fmod(iGlobalTime/5.5, 1.0f)-0.5) )*(1.0-sqrt(ani.x));
+    col *= 1.0f-smoothstep( 0.4f, 0.5f, fabs(fmod(iGlobalTime/5.5f, 1.0f)-0.5f) )*(1.0f-sqrt(ani.x));
     
-    FuWriteImagef(dst, ipos, size, (float4)(col, 1.0));
+    FuWriteImagef(dst, ipos, size, (float4)(col, 1.0f));
 }
 ]]
 
