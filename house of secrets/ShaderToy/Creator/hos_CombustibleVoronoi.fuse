@@ -1,0 +1,306 @@
+--[[
+
+    OpenCL Combustible Voronoi.
+
+    This is a ShaderToy conversion of Combustible Voronoi by ShaderToy user Shane.
+    https://www.shadertoy.com/view/4tlSzl
+
+    Conversion done by S.Neve / House of Secrets.
+
+    The original ShaderToy shader is licensed under the
+    Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License
+    
+]]--
+
+FuRegisterClass("hos_CombustibleVoronoi", CT_SourceTool, {
+    REGS_Name = "Combustible Voronoi",
+    REGS_Category = "House of Secrets\\ShaderToy\\Creator",
+    REGS_OpIconString = "STcv",
+    REGS_OpDescription = "OpenCL Combustible Voronoi Fuse",
+
+    REG_Source_GlobalCtrls = true,
+    REG_Source_SizeCtrls = true,
+    REG_Source_AspectCtrls = true,
+    REG_Source_DepthCtrls = true,
+    REG_SupportsDoD = true,
+    REG_NoPreCalcProcess = true,
+    })
+
+
+clsource =
+[[
+/* 
+    Combustible Voronoi Layers
+	--------------------------
+
+    The effect itself is nothing new or exciting, just some moving 3D Voronoi layering. 
+    However, the fire palette might prove useful to some.
+
+*/
+
+
+// This is my favorite fire palette. It's trimmed down for shader usage, and is based on an 
+// article I read at Hugo Elias's site years ago. I'm sure most old people, like me, have 
+// visited his site at one time or another:
+//
+// http://freespace.virgin.net/hugo.elias/models/m_ffire.htm
+//
+//vec3 firePalette(float i){
+float3 firePalette(float i){
+    float T = 1400.f + 1300.f*i; // Temperature range (in Kelvin).
+    float3 L = (float3)(7.4f, 5.6f, 4.4f); // Red, green, blue wavelengths (in hundreds of nanometers).
+    L = pow(L,(float3)(5.0f)) * (exp(143876.719683f/(T*L))-1.0f);
+    return 1.0f-exp(-500000000/L); // Exposure level. Set to "50." For "70," change the "5" to a "7," etc.
+}
+
+// Hash function. This particular one probably doesn't disperse things quite as nicely as some 
+// of the others around, but it's compact, and seems to work.
+//
+//vec3 hash33(vec3 p){ 
+float3 hash33(float3 p){ 
+    
+    float n = sin(dot(p, (float3)(7, 157, 113))); 
+    float3 i3;    
+    return fract((float3)(2097152, 262144, 32768)*n, &i3); 
+}
+
+// 3D Voronoi: Obviously, this is just a rehash of IQ's original.
+//
+//float voronoi(vec3 p){
+float voronoi(float3 p){
+
+	float3 b, r, g = floor(p);
+    float3 i3;
+	p = fract(p, &i3); // "p -= g;" works on some GPUs, but not all, for some annoying reason.
+	
+	// Maximum value: I think outliers could get as high as "3," the squared diagonal length 
+	// of the unit cube, with the mid point being "0.75." Is that right? Either way, for this 
+	// example, the maximum is set to one, which would cover a good part of the range, whilst 
+	// dispensing with the need to clamp the final result.
+	float d = 1.f; 
+     
+    // I've unrolled one of the loops. GPU architecture is a mystery to me, but I'm aware 
+    // they're not fond of nesting, branching, etc. My laptop GPU seems to hate everything, 
+    // including multiple loops. If it were a person, we wouldn't hang out.
+    //for(float j = -1.; j < 1.01; j++) {
+	//    for(float i = -1.; i < 1.01; i++) {
+    
+    //  Works on AMD devices, not on Nvidia (or not on some drivers...seriously Nvidia, get your shit together.)
+	//for(float j = -1.f; j < 1.01f; j++) {
+	//    for(float i = -1.f; i < 1.01f; i++) {
+    
+    // Works on both AMD and Nvidia devices.
+	for(float j = -1.; j < 1.01; j+=1.0f) {
+	    for(float i = -1.; i < 1.01; i+=1.0f) {
+    		
+		    b = (float3)(i, j, -1.);
+		    r = b - p + hash33(g+b);
+		    d = min(d, dot(r,r));
+    		
+		    b.z = 0.0f;
+		    r = b - p + hash33(g+b);
+		    d = min(d, dot(r,r));
+    		
+		    b.z = 1.f;
+		    r = b - p + hash33(g+b);
+		    d = min(d, dot(r,r));
+    			
+	    }
+	}
+	
+	return d; // Range: [0, 1]
+}
+
+// Standard fBm function with some time dialation to give a parallax 
+// kind of effect. In other words, the position and time frequencies 
+// are changed at different rates from layer to layer.
+//
+//float noiseLayers(in vec3 p) {
+//float noiseLayers(float3 p) {
+float noiseLayers(float3 p, float iGlobalTime) {
+
+    // Normally, you'd just add a time vector to "p," and be done with 
+    // it. However, in this instance, time is added seperately so that 
+    // its frequency can be changed at a different rate. "p.z" is thrown 
+    // in there just to distort things a little more.
+    float3 t = (float3)(0.f, 0.f, p.z+iGlobalTime*1.5f);
+
+    const int iter = 5; // Just five layers is enough.
+    float tot = 0.f, sum = 0.f, amp = 1.f; // Total, sum, amplitude.
+
+    for (int i = 0; i < iter; i++) {
+        tot += voronoi(p + t) * amp; // Add the layer to the total.
+        p *= 2.0f; // Position multiplied by two.
+        t *= 1.5f; // Time multiplied by less than two.
+        sum += amp; // Sum of amplitudes.
+        amp *= 0.5f; // Decrease successive layer amplitude, as normal.
+    }
+    
+    return tot/sum; // Range: [0, 1].
+}
+
+
+kernel void CombustibleVoronoi(  FuWriteImage_t dst,
+                    const int2 size,
+                    const float iGlobalTime
+                    )
+{
+    const int2 ipos = (int2)(get_global_id(1), get_global_id(0));
+    float2 fragCoord = convert_float(ipos) + (0.5f, 0.5f);
+    float2 iResolution = convert_float(size);
+    //float4 iMouse = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
+
+    // Screen coordinates.
+	float2 uv = (fragCoord.xy - iResolution.xy*0.5) / iResolution.y;
+	
+	// Shifting the central position around, just a little, to simulate a 
+	// moving camera, albeit a pretty lame one.
+	uv += (float2)(sin(iGlobalTime*0.5f)*0.25f, cos(iGlobalTime*0.5f)*0.125f);
+	
+    // Constructing the unit ray. 
+	float3 rd = normalize((float3)(uv.x, uv.y, M_PI_F/8.f));
+
+    // Rotating the ray about the XY plane, to simulate a rolling camera.
+	float cs = cos(iGlobalTime*0.25f), si = sin(iGlobalTime*0.25f);
+	//rd.xy *= mat2(cs, -si, si, cs);
+    
+    // OpenCL has no matrices, so we'll just do the math the old fashioned way.
+    
+    // v * m = [v1 v2] |m1,1 m1,2| = [v1m1,1 + v2m2,1   v1m1,2 + v2m2,2]
+    //                 |m2,1 m2,2|
+    
+    rd.xy = (float2)(rd.x * cs + rd.y * -si, rd.x * si + rd.y * cs);
+    
+	
+	// Passing a unit ray multiple into the Voronoi layer function, which 
+	// is nothing more than an fBm setup with some time dialation.
+	//float c = noiseLayers(rd*2.f);
+	float c = noiseLayers(rd*2.f, iGlobalTime);
+	
+	// Optional: Adding a bit of random noise for a subtle dust effect. 
+	c = max(c + dot(hash33(rd)*2.f-1.f, (float3)(0.015f)), 0.f);
+
+    // Coloring:
+    
+    // Nebula.
+    c *= sqrt(c)*1.5f; // Contrast.
+    float3 col = firePalette(c); // Palettization.
+    col = mix(col, col.zyx*0.1f+c*0.9f, (1.f+rd.x+rd.y)*0.45f ); // Color dispersion.
+    
+    // The fire palette on its own. Perhaps a little too much fire color.
+    // c = pow(c, 1.33)*1.33;
+    // float3 col =  firePalette(c);
+   
+    // Black and white, just to keep the art students happy. :)
+	// c *= sqrt(c)*1.5;
+	// float3 col = float3(c);
+	
+	// Done.
+	//fragColor = vec4(clamp(col, 0., 1.), 1.);
+    
+    FuWriteImagef(dst, ipos, size, (float4)(col, 1.0f));
+}
+]]
+
+function Create()
+    InTimeMultiplier = self:AddInput("Time Multiplier", "TimeMultiplier", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        })
+        
+    OutImage = self:AddOutput("Output", "Output", {
+        LINKID_DataType = "Image",
+        LINK_Main = 1,
+        })                
+
+    mgr = OCLManager()
+    if mgr then
+        prog = mgr:BuildCachedProgram(self.RegNode, clsource)
+    end
+    
+    
+end
+
+--function OnAddToFlow()
+    -- mgr = OCLManager()
+    -- if mgr then
+        -- local path = string.sub(debug.getinfo(1).source, 2)
+        -- prog = mgr:BuildCachedProgram("SourceTemplate", path, clsource)
+    -- end
+--end
+
+function Process(req)
+    local timemultiplier = InTimeMultiplier:GetValue(req).Value
+    local _time = req.Time * timemultiplier;
+    
+    if mgr.SupportsImages == false then
+        SourceDepth = 8            -- force to float32
+    end
+
+    local realwidth = Width;
+    local realheight = Height;
+
+    -- We'll handle proxy ourselves
+    Width = Width / Scale
+    Height = Height / Scale
+    Scale = 1
+
+    local imgattrs = {
+        IMG_Document = self.Comp,
+        IMG_Width = Width,
+        IMG_Height = Height,
+        IMG_XScale = XAspect,
+        IMG_YScale = YAspect,
+        IMAT_OriginalWidth = realwidth,
+        IMAT_OriginalHeight = realheight,
+        IMG_Quality = not req:IsQuick(),
+        IMG_MotionBlurQuality = not req:IsNoMotionBlur(),
+        }
+    
+    if not req:IsStampOnly() then
+        imgattrs.IMG_ProxyScale = 1
+    end
+    
+    if SourceDepth ~= 0 then
+        imgattrs.IMG_Depth = SourceDepth
+    end
+    
+    local img = Image(imgattrs)
+    local out
+    
+    if req:IsPreCalc() then
+        out = img
+    elseif prog and img then
+        local climg = prog:CreateImage(img, "readwrite")
+        if climg then
+            -- create image
+            local kernel = prog:CreateKernel("CombustibleVoronoi")
+
+            if kernel then
+                prog:SetArg(kernel, 0, climg)
+                prog:SetArgInt(kernel, 1, img.Width, img.Height)
+                prog:SetArg(kernel, 2, _time)
+                -- prog:SetWorkgroupSize(64)
+
+                prog:RunKernel(kernel)
+                if self.Status then
+                    prog:Download(climg, img)
+                    out = img
+                end
+            end
+            if climg then
+                climg:ReleaseCLObject()
+            end
+        end
+    end
+
+
+    local te = TimeExtent()
+    if timemultiplier > 0.0 then
+    te = TimeExtent(req.Time, req.Time, TIME_UNDEFINED)
+    end
+
+    req:SetOutputData(OutImage, out, te)
+    -- OutImage:Set(req, out)
+end

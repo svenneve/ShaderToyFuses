@@ -359,6 +359,9 @@ function Process(req)
             if climg then
                 climg:ReleaseCLObject()
             end
+            if clichannel0 then
+                clichannel0:ReleaseCLObject()
+            end
         end
     end
 
