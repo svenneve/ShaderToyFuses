@@ -206,7 +206,7 @@ function Create()
     InTimeMultiplier = self:AddInput("Time Multiplier", "TimeMultiplier", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
+        INP_Default = 0.04,
         })
         
     OutImage = self:AddOutput("Output", "Output", {

@@ -35,9 +35,10 @@ clsource =
 // GLSL mod = x - y * floor (x/y)
 // GLSL fract = x - floor(x);
 
-float2 uvf( float2 uv )
+float2 uvfix( float2 uv )
 {
-    uv = fmod(uv, 1.0f); // We need to make sure uv coordinates wrap around (0..1) to prevent the FuImageSample from returning either clamped edge pixels or black pixels (there seems to be no wrap or mirror version of the FuImageSampler.)
+    float2 uv2;
+    uv = fract(uv, &uv2); // We need to make sure uv coordinates wrap around (0..1) to prevent the FuImageSample from returning either clamped edge pixels or black pixels (there seems to be no wrap or mirror version of the FuImageSampler.)
     uv.y = 1.0f - uv.y; // Seems we need to flip the uv.y coordinate from the texture2D sampling to match the ShaderToy look
     return uv;
 }
@@ -58,7 +59,7 @@ float noise2( float2 x, FuReadImage_t iChannel0, int2 iChannelResolution  )
 	//return texture2D( iChannel0, (uv+ 0.5)/256.0, -100.0 ).x;
 	//return FuSampleImageCf( iChannel0, (uv+ 0.5f)/256.0f, iChannelResolution ).x;
 	//return FuSampleImageCf( iChannel0, fract((uv+ 0.5f)/256.0f, &i), iChannelResolution ).x;
-	return FuSampleImageCf( iChannel0, uvf((uv+ 0.5f) / 256.f), iChannelResolution ).x;
+	return FuSampleImageCf( iChannel0, uvfix((uv+ 0.5f) / 256.f), iChannelResolution ).x;
 }
 
 //float noise( in vec3 x )
@@ -73,7 +74,7 @@ float noise3( float3 x, FuReadImage_t iChannel0, int2 iChannelResolution  )
 	//float2 rg = texture2D( iChannel0, (uv+ 0.5)/256.0, -100.0 ).yx;
 	//float2 rg = FuSampleImageCf( iChannel0, (uv+ 0.5)/256.0, iChannelResolution ).yx;
     float2 i2;
-	float2 rg = FuSampleImageCf( iChannel0, uvf((uv+ 0.5f) / 256.f), iChannelResolution ).yx;
+	float2 rg = FuSampleImageCf( iChannel0, uvfix((uv+ 0.5f) / 256.f), iChannelResolution ).yx;
 	//float2 rg = FuSampleImageCf( iChannel0, fract((uv+ 0.5f)/256.0, &i2), iChannelResolution ).yx;
 	return mix( rg.x, rg.y, f.z );
 }
@@ -132,7 +133,7 @@ float3 raymarch( float3 ro, float3 rd, float2 ani, float2 pixel, FuReadImage_t i
     
     // dithering	
 	//float t = 0.03f*texture2D( iChannel0, pixel.xy/iChannelResolution[0].x ).x;
-	float t = 0.03f*FuSampleImageCf( iChannel0, uvf(pixel.xy/iChannelResolution.x), iChannelResolution ).x;
+	float t = 0.03f*FuSampleImageCf( iChannel0, uvfix(pixel.xy/iChannelResolution.x), iChannelResolution ).x;
 
     // raymarch	
 	float4 sum = (float4)( 0.0f );
@@ -199,7 +200,7 @@ kernel void Storm(  FuWriteImage_t dst,
 	
 	// camera parameters
 	//vec4 camPars = texture2D( iChannel0, floor(1.0+iGlobalTime/5.5)*vec2(5.0,7.0)/iChannelResolution[0].xy );
-	float4 camPars = FuSampleImageCf( iChannel0, uvf(floor(1.0f+iGlobalTime/5.5f)*(float2)(5.0f,7.0f)/convert_float2(iChannelResolution)), iChannelResolution );
+	float4 camPars = FuSampleImageCf( iChannel0, uvfix(floor(1.0f+iGlobalTime/5.5f)*(float2)(5.0f,7.0f)/convert_float2(iChannelResolution)), iChannelResolution );
 	
     // camera position
     float3 ro = 4.0f*normalize((float3)(cos(30.0f*camPars.x + 0.023f*time), 0.3f+0.2f*sin(30.0f*camPars.x + 0.08f*time), sin(30.0f*camPars.x + 0.023f*iGlobalTime)));
@@ -209,8 +210,8 @@ kernel void Storm(  FuWriteImage_t dst,
     // shake		
 	//ro += ani.x*ani.x*0.05*(-1.0+2.0*F( iChannel0, 1.035*time*(float2)(0.010,0.014) ).xyz);
 	//ta += ani.x*ani.x*0.20*(-1.0+2.0*texture2D( iChannel0, 1.035*time*(float2)(0.013,0.008) ).xyz);
-    ro += ani.x*ani.x*0.05f*(-1.0f+2.0f*FuSampleImageCf( iChannel0, uvf(1.035f*time*(float2)(0.010f,0.014f)), iChannelResolution ).xyz);
-	ta += ani.x*ani.x*0.20f*(-1.0f+2.0f*FuSampleImageCf( iChannel0, uvf(1.035f*time*(float2)(0.013f,0.008f)), iChannelResolution ).xyz);
+    ro += ani.x*ani.x*0.05f*(-1.0f+2.0f*FuSampleImageCf( iChannel0, uvfix(1.035f*time*(float2)(0.010f,0.014f)), iChannelResolution ).xyz);
+	ta += ani.x*ani.x*0.20f*(-1.0f+2.0f*FuSampleImageCf( iChannel0, uvfix(1.035f*time*(float2)(0.013f,0.008f)), iChannelResolution ).xyz);
 
 	
 	// build ray
@@ -239,7 +240,7 @@ function Create()
     InTimeMultiplier = self:AddInput("Time Multiplier", "TimeMultiplier", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
+        INP_Default = 0.04,
         })
         
 	InIChannel0 = self:AddInput("iChannel0", "iChannel0", {

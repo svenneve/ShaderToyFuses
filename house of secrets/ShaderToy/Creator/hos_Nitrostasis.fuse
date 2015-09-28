@@ -8,7 +8,7 @@ https://www.shadertoy.com/view/llj3Wy
 Conversion done by S.Neve / House of Secrets.
 ]]--
 
-FuRegisterClass("hos_Nitrostasis", CT_Tool, {
+FuRegisterClass("hos_Nitrostasis", CT_SourceTool, {
     REGS_Name = "Nitrostasis",
 	REGS_Category = "House of Secrets\\ShaderToy\\Creator",
 	REGS_OpIconString = "STns",
@@ -25,6 +25,15 @@ FuRegisterClass("hos_Nitrostasis", CT_Tool, {
 
 clsource =
 [[
+
+float2 uvfix( float2 uv )
+{
+    float2 uv2;
+    uv = fract(uv, &uv2); // We need to make sure uv coordinates wrap around (0..1) to prevent the FuImageSample from returning either clamped edge pixels or black pixels (there seems to be no wrap or mirror version of the FuImageSampler.)
+    //uv.y = 1.0f - uv.y; // Seems we need to flip the uv.y coordinate from the texture2D sampling to match the ShaderToy look
+    return uv;
+}
+
 /*--------------------------------------------------------------------------------------
 License CC0 - http://creativecommons.org/publicdomain/zero/1.0/
 To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
@@ -106,30 +115,34 @@ float noiseValue(float3 uv)
 }
 
 // IQ's style of super fast texture noise
-float noiseTex(float3 x)
+//float noiseTex2(vec3 x)
+float noiseTex(float3 x, FuReadImage_t iChannel0, int2 iChannelResolution)
 {
     float3 i;
     float3 fl = floor(x);
     float3 fr = fract(x, &i);
 	fr = fr * fr * (3.0 - 2.0 * fr);
-	float2 uv = (fl.xy + (float2)(37.0, 17.0) * fl.z) + fr.xy;
-	float2 rg = FuReadImagef(inimg, convert_int2((uv + 0.5) * 0.00390625), size);//texture2D(iChannel0, (uv + 0.5) * 0.00390625, -100.0 ).xy;
+	float2 uv = (float2)(fl.xy + (float2)(37.0, 17.0) * fl.z) + fr.xy;
+    //texture2D(iChannel0, (uv + 0.5) * 0.00390625, -100.0 ).xy;
+	float2 rg = FuSampleImageCf(iChannel0, uvfix((uv + 0.5) * 0.00390625), iChannelResolution).xy;
 	return mix(rg.y, rg.x, fr.z);
 }
 // 2 components returned
-float2 noiseTex2(float3 x)
+//vec2 noiseTex2(vec3 x)
+float2 noiseTex2(float3 x, FuReadImage_t iChannel0, int2 iChannelResolution)
 {
     float3 i;
     float3 fl = floor(x);
     float3 fr = fract(x, &i);
 	fr = fr * fr * (3.0 - 2.0 * fr);
-	float2 uv = (fl.xy + float2(37.0, 17.0) * fl.z) + fr.xy;
-	float4 rgba = FuReadImagef(inimg, convert_int2((uv + 0.5) * 0.00390625), size);//texture2D(iChannel0, (uv + 0.5) * 0.00390625, -100.0 ).xyzw;
+	float2 uv = (float2)(fl.xy + (float2)(37.0, 17.0) * fl.z) + fr.xy;
+    //texture2D(iChannel0, (uv + 0.5) * 0.00390625, -100.0 ).xyzw;
+	float4 rgba = FuSampleImageCf(iChannel0, uvfix((uv + 0.5) * 0.00390625), iChannelResolution);
 	return mix(rgba.yw, rgba.xz, fr.z);
 }
 
-float3 camPos = (0.0), camFacing;
-float3 camLookat=(0,0.0,0);
+//float3 camPos = (0.0), camFacing;
+//float3 camLookat=(0,0.0,0);
 
 // polynomial smooth min (k = 0.1);
 float smin(float a, float b, float k)
@@ -150,57 +163,61 @@ float2 matMin(float2 a, float2 b)
 }
 
 // Calculate the distance field that defines the object.
-float2 DistanceToObject(in float3 p)
+float2 DistanceToObject(float3 p, FuReadImage_t iChannel0, int2 iChannelResolution, float iGlobalTime, float3 camLookat)
 {
     // first distort the y with some noise so it doesn't look repetitive.
     //p.xyz = RotateY(p, length(p.xz) + iGlobalTime);
     //p.y += 0.1;
     //p.xyz = RotateZ(p, length(p.z) + iGlobalTime);
-    p.y += noiseTex(p*0.5)*0.5;
+    p.y += noiseTex(p*0.5, iChannel0, iChannelResolution)*0.5;
     // multiple frequencies of noise, with time added for animation
-    float n = noiseTex(p*2.0+iGlobalTime*0.6);
-    n += noiseTex(p*4.0+iGlobalTime*0.7)*0.5;
-    n += noiseTex(p*8.0)*0.25;
-    n += noiseTex(p*16.0)*0.125;
-    n += noiseTex(p*32.0)*0.0625;
-    n += noiseTex(p*64.0)*0.0625*0.5;
-    n += noiseTex(p*128.0)*0.0625*0.25;
+    float n = noiseTex(p*2.0+iGlobalTime*0.6, iChannel0, iChannelResolution);
+    n += noiseTex(p*4.0+iGlobalTime*0.7, iChannel0, iChannelResolution)*0.5;
+    n += noiseTex(p*8.0, iChannel0, iChannelResolution)*0.25;
+    n += noiseTex(p*16.0, iChannel0, iChannelResolution)*0.125;
+    n += noiseTex(p*32.0, iChannel0, iChannelResolution)*0.0625;
+    n += noiseTex(p*64.0, iChannel0, iChannelResolution)*0.0625*0.5;
+    n += noiseTex(p*128.0, iChannel0, iChannelResolution)*0.0625*0.25;
     // subtract off distance for cloud thickness
     float dist = n*0.25 - (0.275);// - abs(p.y*0.02)/* - iGlobalTime*0.01*/);
     //dist = smax(dist, -(length(p-camPos) - 0.3), 0.1);	// nice near fade
     // smooth blend subtract repeated layers
-    dist = smax(dist, -(abs(frac(p.y*4.0)-0.5) - 0.15), 0.4);
-    float2 distMat = float2(dist, 0.0);
+    float i1;
+    dist = smax(dist, -(fabs(fract(p.y*4.0, &i1)-0.5) - 0.15), 0.4);
+    float2 distMat = (float2)(dist, 0.0);
     // sun in the distance
-    distMat = matMin(distMat, float2(length(p-camLookat - float3(0.0, 0.5, -1.0)) - 0.6, 6.0));
+    distMat = matMin(distMat, (float2)(length(p-camLookat - (float3)(0.0, 0.5, -1.0)) - 0.6, 6.0));
     return distMat;
 }
 
-kernel void SourceTemplate(FuWriteImage_t dst,
+__kernel void Nitrostasis(FuWriteImage_t dst,
                             const int2 size,
-                            const float iGlobalTime)
+                            const float iGlobalTime,
+                            FuReadImage_t iChannel0,
+                            const int2 iChannelResolution)
 {
     const int2 ipos = (int2)(get_global_id(1), get_global_id(0));
     float2 fragCoord = convert_float(ipos);
     float2 iResolution = convert_float(size);
-    float2 iMouse = (0.0, 0.0);
+    float2 iMouse = (float2)(0.0, 0.0);
     
-    localTime = iGlobalTime - 0.0;
+    float localTime = iGlobalTime - 0.0;
 	// ---------------- First, set up the camera rays for ray marching ----------------
 	float2 uv = fragCoord.xy/iResolution.xy * 2.0 - 1.0;
     float zoom = 1.7;
     uv /= zoom;
 
 	// Camera up vector.
-	float3 camUp=(0,1,0);
+	float3 camUp=(float3)(0,1,0);
 
 	// Camera lookat.
-	camLookat=(0,0.0,0);
+	float3 camLookat=(float3)(0,0.0,0);
 
     // debugging camera
     float mx=(iMouse.x/iResolution.x+0.375)*M_PI_F*2.0-0.7 + localTime*3.1415 * 0.0625*0.666*0.0;
 	float my=-iMouse.y*0.0/iResolution.y*10.0 - sin(localTime * 0.31)*0.5*0.0;//*M_PI_F/2.01;
-	camPos += (float3)(cos(my)*cos(mx),sin(my),cos(my)*sin(mx))*(3.2);
+	//camPos += (float3)(cos(my)*cos(mx),sin(my),cos(my)*sin(mx))*(3.2);
+	float3 camPos = (float3)(cos(my)*cos(mx),sin(my),cos(my)*sin(mx))*(3.2);
     camPos.z -= iGlobalTime * 0.5;
     camLookat.z -= iGlobalTime * 0.5;
 
@@ -218,12 +235,12 @@ kernel void SourceTemplate(FuWriteImage_t dst,
 
 	// ----------------------------------- Animate ------------------------------------
 	// --------------------------------------------------------------------------------
-	float2 distAndMat = (0.5, 0.0);
+	float2 distAndMat = (float2)(0.5, 0.0);
     const float nearClip = 0.02;
 	float t = nearClip;
 	float maxDepth = 10.0;
-	float3 pos = (0,0,0);
-    marchCount = 0.0;
+	float3 pos = (float3)(0,0,0);
+    float marchCount = 0.0;
     {
         // ray marching time
         for (int i = 0; i < 150; i++)	// This is the count of the max times the ray actually marches.
@@ -233,8 +250,8 @@ kernel void SourceTemplate(FuWriteImage_t dst,
             // This is _the_ function that defines the "distance field".
             // It's really what makes the scene geometry.
             // *******************************************************
-            distAndMat = DistanceToObject(pos);
-            if ((t > maxDepth) || (abs(distAndMat.x) < 0.0025)) break;
+            distAndMat = DistanceToObject(pos, iChannel0, iChannelResolution, iGlobalTime, camLookat);
+            if ((t > maxDepth) || (fabs(distAndMat.x) < 0.0025)) break;
             // move along the ray
             t += distAndMat.x * 0.7;
             //marchCount+= (10.0-distAndMat.x)*(10.0-distAndMat.x)*1.2;//distance(lastPos, pos);
@@ -245,34 +262,35 @@ kernel void SourceTemplate(FuWriteImage_t dst,
     // --------------------------------------------------------------------------------
 	// Now that we have done our ray marching, let's put some color on this geometry.
 
-	float3 finalColor = float3(0.0);
+	float3 finalColor = (float3)(0.0);
 
 	// If a ray actually hit the object, let's light it.
-	if (abs(distAndMat.x) < 0.0025)
+	if (fabs(distAndMat.x) < 0.0025)
    // if (t <= maxDepth)
 	{
         // ------ Calculate texture color ------
-        float3 texColor = float3(0.2, 0.26, 0.21)*0.75;
+        float3 texColor = (float3)(0.2, 0.26, 0.21)*0.75;
         // sun material
-        if (distAndMat.y == 6.0) texColor = float3(0.51, 0.21, 0.1)*10.5;
+        if (distAndMat.y == 6.0) texColor = (float3)(0.51, 0.21, 0.1)*10.5;
         finalColor = texColor;
 
         // visualize length of gradient of distance field to check distance field correctness
-        //finalColor = float3(0.5) * (length(normalU) / smallVec.x);
+        //finalColor = (float3)(0.5) * (length(normalU) / smallVec.x);
         //finalColor = normal * 0.5 + 0.5;
 	}
     else
     {
     }
     // This is the glow
-    finalColor += marchCount * float3(4.2, 1.0, 0.41) * 0.0001;
+    finalColor += marchCount * (float3)(4.2, 1.0, 0.41) * 0.0001;
     // fog
-	finalColor = mix(float3(0.91, 0.81, 0.99)*1.75, finalColor, exp(-t*0.15));
+	finalColor = mix((float3)(0.91, 0.81, 0.99)*1.75, finalColor, exp(-t*0.15));
 
-    if (t <= nearClip) finalColor = float3(1.9, 1.1, 0.9)*0.25 * noiseTex(float3(iGlobalTime*8.0));
+    if (t <= nearClip) finalColor = (float3)(1.9, 1.1, 0.9)*0.25 * noiseTex((float3)(iGlobalTime*8.0), iChannel0, iChannelResolution);
 
     // vignette?
-    finalColor *= float3(1.0) * pow(saturate(1.0 - length(uv/2.5)), 2.0);
+    //finalColor *= (float3)(1.0) * pow(saturate(1.0 - length(uv/2.5)), 2.0);
+    finalColor *= (float3)(1.0) * pow(max(0.0, min(1.0, (1.0 - length(uv/2.5)))), 2.0);
     finalColor *= 1.2;
     finalColor *= 0.85;
 
@@ -284,10 +302,22 @@ kernel void SourceTemplate(FuWriteImage_t dst,
 ]]
 
 function Create()
+    InTimeMultiplier = self:AddInput("Time Multiplier", "TimeMultiplier", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.04,
+        })
+        
+	InIChannel0 = self:AddInput("iChannel0", "iChannel0", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})	
+        
 	OutImage = self:AddOutput("Output", "Output", {
 		LINKID_DataType = "Image",
 		LINK_Main = 1,
-		})				
+		})		
+	
 
 	mgr = OCLManager()
 	if mgr then
@@ -303,59 +333,63 @@ end
 	-- end
 -- end
 
-function Process(req) 
-	if mgr.SupportsImages == false then
-		SourceDepth = 8			-- force to float32
-	end
+function Process(req)
+   local timemultiplier = InTimeMultiplier:GetValue(req).Value
+    local ichannel0 = InIChannel0:GetValue(req)
+    local _time = req.Time * timemultiplier;
+    
+    if mgr.SupportsImages == false then
+        SourceDepth = 8            -- force to float32
+    end
 
-	local realwidth = Width;
-	local realheight = Height;
+    local realwidth = Width;
+    local realheight = Height;
 
-	-- We'll handle proxy ourselves
-	Width = Width / Scale
-	Height = Height / Scale
-	Scale = 1
+    -- We'll handle proxy ourselves
+    Width = Width / Scale
+    Height = Height / Scale
+    Scale = 1
 
-	local imgattrs = {
-		IMG_Document = self.Comp,
-		IMG_Width = Width,
-		IMG_Height = Height,
-		IMG_XScale = XAspect,
-		IMG_YScale = YAspect,
-		IMAT_OriginalWidth = realwidth,
-		IMAT_OriginalHeight = realheight,
-		IMG_Quality = not req:IsQuick(),
-		IMG_MotionBlurQuality = not req:IsNoMotionBlur(),
-		}
-	
-	if not req:IsStampOnly() then
-		imgattrs.IMG_ProxyScale = 1
-	end
-	
-	if SourceDepth ~= 0 then
-		imgattrs.IMG_Depth = SourceDepth
-	end
-	
-	local img = Image(imgattrs)
-	local out
-
+    local imgattrs = {
+        IMG_Document = self.Comp,
+        IMG_Width = Width,
+        IMG_Height = Height,
+        IMG_XScale = XAspect,
+        IMG_YScale = YAspect,
+        IMAT_OriginalWidth = realwidth,
+        IMAT_OriginalHeight = realheight,
+        IMG_Quality = not req:IsQuick(),
+        IMG_MotionBlurQuality = not req:IsNoMotionBlur(),
+        }
+    
+    if not req:IsStampOnly() then
+        imgattrs.IMG_ProxyScale = 1
+    end
+    
+    if SourceDepth ~= 0 then
+        imgattrs.IMG_Depth = SourceDepth
+    end
+    
+    local img = Image(imgattrs)
+    local out
+    
 	if req:IsPreCalc() then
 		out = img
 	elseif prog and img then
-		local climg = prog:CreateImage(img, "readwrite")
-		if climg then
+        local climg = prog:CreateImage(img, "readwrite")
+        local clichannel0 = prog:CreateImage(ichannel0, "read")
+        if climg and clichannel0 then
 			-- create image
-			local kernel = prog:CreateKernel("SourceTemplate")
+			local kernel = prog:CreateKernel("Nitrostasis")
 
 			if kernel then
 				prog:SetArg(kernel, 0, climg)
-				prog:SetArgInt(kernel, 1, Width, Height)
-				prog:SetWorkgroupSize(64)
+				prog:SetArgInt(kernel, 1, img.Width, img.Height)
+                prog:SetArg(kernel, 2, _time)
+                prog:SetArg(kernel, 3, clichannel0)
+                prog:SetArgInt(kernel, 4, ichannel0.Width, ichannel0.Height )
+                -- prog:SetWorkgroupSize(64)
 
-
-                -- if prog:Download(climg, img) then
-                    -- out = img
-                -- end
                 prog:RunKernel(kernel)
 				if self.Status then
 					prog:Download(climg, img)
@@ -365,15 +399,17 @@ function Process(req)
 			if climg then
 				climg:ReleaseCLObject()
 			end
+            if clichannel0 then
+                clichannel0:ReleaseCLObject()
+            end
 		end
 	end
 
+    local te = TimeExtent()
+    if timemultiplier > 0.0 then
+    te = TimeExtent(req.Time, req.Time, TIME_UNDEFINED)
+    end
 
-	-- local te = TimeExtent()
-	-- if seetherate > 0.0 then
-	-- te = TimeExtent(req.Time, req.Time, TIME_UNDEFINED)
-	-- end
-
-	-- req:SetOutputData(OutImage, out, te)
-    OutImage:Set(req, out)
+    req:SetOutputData(OutImage, out, te)
+    -- OutImage:Set(req, out)
 end
