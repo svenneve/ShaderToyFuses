@@ -1,6 +1,6 @@
 --[[
 
-OpenCL Hexagon Pixels.
+OpenCL Nitrostasis Pixels.
 
 This is a ShaderToy conversion of the Nitrostatis by ShaderToy user octaviogood.
 https://www.shadertoy.com/view/llj3Wy
@@ -30,7 +30,7 @@ float2 uvfix( float2 uv )
 {
     float2 uv2;
     uv = fract(uv, &uv2); // We need to make sure uv coordinates wrap around (0..1) to prevent the FuImageSample from returning either clamped edge pixels or black pixels (there seems to be no wrap or mirror version of the FuImageSampler.)
-    //uv.y = 1.0f - uv.y; // Seems we need to flip the uv.y coordinate from the texture2D sampling to match the ShaderToy look
+    uv.y = 1.0f - uv.y; // Seems we need to flip the uv.y coordinate from the texture2D sampling to match the ShaderToy look
     return uv;
 }
 
