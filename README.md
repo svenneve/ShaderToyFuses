@@ -24,9 +24,11 @@ Combustible Voronoi
 ![screen](http://i.imgur.com/X5F24kA.gif)
 
 Hexagon Pixels
+
 ![screen](http://i.imgur.com/zLpf2aH.gif)
 
 Hexagon Sampler
+
 ![screen](http://i.imgur.com/HPVjLu2.gif)
 
 
