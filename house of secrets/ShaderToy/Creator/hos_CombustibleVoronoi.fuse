@@ -146,7 +146,7 @@ kernel void CombustibleVoronoi(  FuWriteImage_t dst,
                     )
 {
     const int2 ipos = (int2)(get_global_id(1), get_global_id(0));
-    float2 fragCoord = convert_float(ipos) + (0.5f, 0.5f);
+    float2 fragCoord = convert_float(ipos) + (float2)(0.5f, 0.5f);
     float2 iResolution = convert_float(size);
     //float4 iMouse = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
 

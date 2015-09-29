@@ -65,25 +65,25 @@ float3 RotateZ(float3 v, float rad)
 // noise functions
 float Hash2d(float2 uv)
 {
-    float f = uv.x + uv.y * 37.0;
+    float f = uv.x + uv.y * 37.0f;
     float i;
-    return fract(sin(f)*104003.9, &i);
+    return fract(sin(f)*104003.9f, &i);
 }
 float Hash3d(float3 uv)
 {
-    float f = uv.x + uv.y * 37.0 + uv.z * 521.0;
+    float f = uv.x + uv.y * 37.0f + uv.z * 521.0f;
     float i;
-    return fract(sin(f)*110003.9, &i);
+    return fract(sin(f)*110003.9f, &i);
 }
 float mixP(float f0, float f1, float a)
 {
-    return mix(f0, f1, a*a*(3.0-2.0*a));
+    return mix(f0, f1, a*a*(3.0f-2.0f*a));
 }
-//const float2 zeroOne = (0.0, 1.0);
+//const float2 zeroOne = (0.0f, 1.0f);
 float noise2d(float2 uv)
 {
     float2 i;
-    float2 zeroOne = (float2)(0.0, 1.0);
+    float2 zeroOne = (float2)(0.0f, 1.0f);
     float2 fr = fract(uv.xy, &i);
     float2 fl = floor(uv.xy);
     float h00 = Hash2d(fl);
@@ -94,7 +94,7 @@ float noise2d(float2 uv)
 }
 float noiseValue(float3 uv)
 {
-    float2 zeroOne = (float2)(0.0, 1.0);
+    float2 zeroOne = (float2)(0.0f, 1.0f);
     float3 i;
     float3 fr = fract(uv.xyz, &i);
     float3 fl = floor(uv.xyz);
@@ -121,10 +121,10 @@ float noiseTex(float3 x, FuReadImage_t iChannel0, int2 iChannelResolution)
     float3 i;
     float3 fl = floor(x);
     float3 fr = fract(x, &i);
-	fr = fr * fr * (3.0 - 2.0 * fr);
-	float2 uv = (float2)(fl.xy + (float2)(37.0, 17.0) * fl.z) + fr.xy;
+	fr = fr * fr * (3.0f - 2.0f * fr);
+	float2 uv = (float2)(fl.xy + (float2)(37.0f, 17.0f) * fl.z) + fr.xy;
     //texture2D(iChannel0, (uv + 0.5) * 0.00390625, -100.0 ).xy;
-	float2 rg = FuSampleImageCf(iChannel0, uvfix((uv + 0.5) * 0.00390625), iChannelResolution).xy;
+	float2 rg = FuSampleImageCf(iChannel0, uvfix((uv + 0.5f) * 0.00390625f), iChannelResolution).xy;
 	return mix(rg.y, rg.x, fr.z);
 }
 // 2 components returned
@@ -134,10 +134,10 @@ float2 noiseTex2(float3 x, FuReadImage_t iChannel0, int2 iChannelResolution)
     float3 i;
     float3 fl = floor(x);
     float3 fr = fract(x, &i);
-	fr = fr * fr * (3.0 - 2.0 * fr);
-	float2 uv = (float2)(fl.xy + (float2)(37.0, 17.0) * fl.z) + fr.xy;
+	fr = fr * fr * (3.0f - 2.0f * fr);
+	float2 uv = (float2)(fl.xy + (float2)(37.0f, 17.0f) * fl.z) + fr.xy;
     //texture2D(iChannel0, (uv + 0.5) * 0.00390625, -100.0 ).xyzw;
-	float4 rgba = FuSampleImageCf(iChannel0, uvfix((uv + 0.5) * 0.00390625), iChannelResolution);
+	float4 rgba = FuSampleImageCf(iChannel0, uvfix((uv + 0.5f) * 0.00390625f), iChannelResolution);
 	return mix(rgba.yw, rgba.xz, fr.z);
 }
 
@@ -147,13 +147,13 @@ float2 noiseTex2(float3 x, FuReadImage_t iChannel0, int2 iChannelResolution)
 // polynomial smooth min (k = 0.1);
 float smin(float a, float b, float k)
 {
-    float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 );
-    return mix( b, a, h ) - k*h*(1.0-h);
+    float h = clamp( 0.5f+0.5f*(b-a)/k, 0.0f, 1.0f );
+    return mix( b, a, h ) - k*h*(1.0f-h);
 }
 float smax(float a, float b, float k)
 {
-    float h = clamp( 0.5+0.5*((-b)+a)/k, 0.0, 1.0 );
-    return -(mix( -b, -a, h ) - k*h*(1.0-h));
+    float h = clamp( 0.5f+0.5f*((-b)+a)/k, 0.0f, 1.0f );
+    return -(mix( -b, -a, h ) - k*h*(1.0f-h));
 }
 
 float2 matMin(float2 a, float2 b)
@@ -169,24 +169,24 @@ float2 DistanceToObject(float3 p, FuReadImage_t iChannel0, int2 iChannelResoluti
     //p.xyz = RotateY(p, length(p.xz) + iGlobalTime);
     //p.y += 0.1;
     //p.xyz = RotateZ(p, length(p.z) + iGlobalTime);
-    p.y += noiseTex(p*0.5, iChannel0, iChannelResolution)*0.5;
+    p.y += noiseTex(p*0.5f, iChannel0, iChannelResolution)*0.5f;
     // multiple frequencies of noise, with time added for animation
-    float n = noiseTex(p*2.0+iGlobalTime*0.6, iChannel0, iChannelResolution);
-    n += noiseTex(p*4.0+iGlobalTime*0.7, iChannel0, iChannelResolution)*0.5;
-    n += noiseTex(p*8.0, iChannel0, iChannelResolution)*0.25;
-    n += noiseTex(p*16.0, iChannel0, iChannelResolution)*0.125;
-    n += noiseTex(p*32.0, iChannel0, iChannelResolution)*0.0625;
-    n += noiseTex(p*64.0, iChannel0, iChannelResolution)*0.0625*0.5;
-    n += noiseTex(p*128.0, iChannel0, iChannelResolution)*0.0625*0.25;
+    float n = noiseTex(p*2.0f+iGlobalTime*0.6f, iChannel0, iChannelResolution);
+    n += noiseTex(p*4.0f+iGlobalTime*0.7f, iChannel0, iChannelResolution)*0.5f;
+    n += noiseTex(p*8.0f, iChannel0, iChannelResolution)*0.25f;
+    n += noiseTex(p*16.0f, iChannel0, iChannelResolution)*0.125f;
+    n += noiseTex(p*32.0f, iChannel0, iChannelResolution)*0.0625f;
+    n += noiseTex(p*64.0f, iChannel0, iChannelResolution)*0.0625f*0.5f;
+    n += noiseTex(p*128.0f, iChannel0, iChannelResolution)*0.0625f*0.25f;
     // subtract off distance for cloud thickness
-    float dist = n*0.25 - (0.275);// - abs(p.y*0.02)/* - iGlobalTime*0.01*/);
+    float dist = n*0.25f - (0.275f);// - abs(p.y*0.02)/* - iGlobalTime*0.01*/);
     //dist = smax(dist, -(length(p-camPos) - 0.3), 0.1);	// nice near fade
     // smooth blend subtract repeated layers
     float i1;
-    dist = smax(dist, -(fabs(fract(p.y*4.0, &i1)-0.5) - 0.15), 0.4);
-    float2 distMat = (float2)(dist, 0.0);
+    dist = smax(dist, -(fabs(fract(p.y*4.0f, &i1)-0.5f) - 0.15f), 0.4f);
+    float2 distMat = (float2)(dist, 0.0f);
     // sun in the distance
-    distMat = matMin(distMat, (float2)(length(p-camLookat - (float3)(0.0, 0.5, -1.0)) - 0.6, 6.0));
+    distMat = matMin(distMat, (float2)(length(p-camLookat - (float3)(0.0f, 0.5f, -1.0f)) - 0.6f, 6.0f));
     return distMat;
 }
 
@@ -199,31 +199,31 @@ __kernel void Nitrostasis(FuWriteImage_t dst,
     const int2 ipos = (int2)(get_global_id(1), get_global_id(0));
     float2 fragCoord = convert_float(ipos);
     float2 iResolution = convert_float(size);
-    float2 iMouse = (float2)(0.0, 0.0);
+    float2 iMouse = (float2)(0.0f, 0.0f);
     
-    float localTime = iGlobalTime - 0.0;
+    float localTime = iGlobalTime - 0.0f;
 	// ---------------- First, set up the camera rays for ray marching ----------------
-	float2 uv = fragCoord.xy/iResolution.xy * 2.0 - 1.0;
-    float zoom = 1.7;
+	float2 uv = fragCoord.xy/iResolution.xy * 2.0f - 1.0f;
+    float zoom = 1.7f;
     uv /= zoom;
 
 	// Camera up vector.
-	float3 camUp=(float3)(0,1,0);
+	float3 camUp=(float3)(0.f,1.f,0.f);
 
 	// Camera lookat.
-	float3 camLookat=(float3)(0,0.0,0);
+	float3 camLookat=(float3)(0.f,0.0f,0.f);
 
     // debugging camera
-    float mx=(iMouse.x/iResolution.x+0.375)*M_PI_F*2.0-0.7 + localTime*3.1415 * 0.0625*0.666*0.0;
-	float my=-iMouse.y*0.0/iResolution.y*10.0 - sin(localTime * 0.31)*0.5*0.0;//*M_PI_F/2.01;
+    float mx=(iMouse.x/iResolution.x+0.375f)*M_PI_F*2.0f-0.7f + localTime*3.1415f * 0.0625f*0.666f*0.0f;
+	float my=-iMouse.y*0.0f/iResolution.y*10.0f - sin(localTime * 0.31f)*0.5f*0.0f;//*M_PI_F/2.01;
 	//camPos += (float3)(cos(my)*cos(mx),sin(my),cos(my)*sin(mx))*(3.2);
-	float3 camPos = (float3)(cos(my)*cos(mx),sin(my),cos(my)*sin(mx))*(3.2);
-    camPos.z -= iGlobalTime * 0.5;
-    camLookat.z -= iGlobalTime * 0.5;
+	float3 camPos = (float3)(cos(my)*cos(mx),sin(my),cos(my)*sin(mx))*(3.2f);
+    camPos.z -= iGlobalTime * 0.5f;
+    camLookat.z -= iGlobalTime * 0.5f;
 
     // add randomness to camera for depth-of-field look close up.
     // Reduces the banding the the marchcount glow causes
-    camPos += (float3)(Hash2d(uv)*0.91, Hash2d(uv+37.0), Hash2d(uv+47.0))*0.01;
+    camPos += (float3)(Hash2d(uv)*0.91f, Hash2d(uv+37.0f), Hash2d(uv+47.0f))*0.01f;
 
 	// Camera setup.
 	float3 camVec=normalize(camLookat - camPos);
@@ -235,12 +235,12 @@ __kernel void Nitrostasis(FuWriteImage_t dst,
 
 	// ----------------------------------- Animate ------------------------------------
 	// --------------------------------------------------------------------------------
-	float2 distAndMat = (float2)(0.5, 0.0);
-    const float nearClip = 0.02;
+	float2 distAndMat = (float2)(0.5f, 0.0f);
+    const float nearClip = 0.02f;
 	float t = nearClip;
-	float maxDepth = 10.0;
-	float3 pos = (float3)(0,0,0);
-    float marchCount = 0.0;
+	float maxDepth = 10.0f;
+	float3 pos = (float3)(0.f,0.f,0.f);
+    float marchCount = 0.0f;
     {
         // ray marching time
         for (int i = 0; i < 150; i++)	// This is the count of the max times the ray actually marches.
@@ -251,27 +251,27 @@ __kernel void Nitrostasis(FuWriteImage_t dst,
             // It's really what makes the scene geometry.
             // *******************************************************
             distAndMat = DistanceToObject(pos, iChannel0, iChannelResolution, iGlobalTime, camLookat);
-            if ((t > maxDepth) || (fabs(distAndMat.x) < 0.0025)) break;
+            if ((t > maxDepth) || (fabs(distAndMat.x) < 0.0025f)) break;
             // move along the ray
-            t += distAndMat.x * 0.7;
-            //marchCount+= (10.0-distAndMat.x)*(10.0-distAndMat.x)*1.2;//distance(lastPos, pos);
-            marchCount+= 1.0/distAndMat.x;
+            t += distAndMat.x * 0.7f;
+            //marchCount+= (10.0f-distAndMat.x)*(10.0f-distAndMat.x)*1.2f;//distance(lastPos, pos);
+            marchCount+= 1.0f/distAndMat.x;
         }
     }
 
     // --------------------------------------------------------------------------------
 	// Now that we have done our ray marching, let's put some color on this geometry.
 
-	float3 finalColor = (float3)(0.0);
+	float3 finalColor = (float3)(0.0f);
 
 	// If a ray actually hit the object, let's light it.
-	if (fabs(distAndMat.x) < 0.0025)
+	if (fabs(distAndMat.x) < 0.0025f)
    // if (t <= maxDepth)
 	{
         // ------ Calculate texture color ------
-        float3 texColor = (float3)(0.2, 0.26, 0.21)*0.75;
+        float3 texColor = (float3)(0.2f, 0.26f, 0.21f)*0.75f;
         // sun material
-        if (distAndMat.y == 6.0) texColor = (float3)(0.51, 0.21, 0.1)*10.5;
+        if (distAndMat.y == 6.0f) texColor = (float3)(0.51f, 0.21f, 0.1f)*10.5f;
         finalColor = texColor;
 
         // visualize length of gradient of distance field to check distance field correctness
@@ -282,22 +282,22 @@ __kernel void Nitrostasis(FuWriteImage_t dst,
     {
     }
     // This is the glow
-    finalColor += marchCount * (float3)(4.2, 1.0, 0.41) * 0.0001;
+    finalColor += marchCount * (float3)(4.2f, 1.0f, 0.41f) * 0.0001f;
     // fog
-	finalColor = mix((float3)(0.91, 0.81, 0.99)*1.75, finalColor, exp(-t*0.15));
+	finalColor = mix((float3)(0.91f, 0.81f, 0.99f)*1.75f, finalColor, exp(-t*0.15f));
 
-    if (t <= nearClip) finalColor = (float3)(1.9, 1.1, 0.9)*0.25 * noiseTex((float3)(iGlobalTime*8.0), iChannel0, iChannelResolution);
+    if (t <= nearClip) finalColor = (float3)(1.9f, 1.1f, 0.9f)*0.25f * noiseTex((float3)(iGlobalTime*8.0f), iChannel0, iChannelResolution);
 
     // vignette?
     //finalColor *= (float3)(1.0) * pow(saturate(1.0 - length(uv/2.5)), 2.0);
-    finalColor *= (float3)(1.0) * pow(max(0.0, min(1.0, (1.0 - length(uv/2.5)))), 2.0);
-    finalColor *= 1.2;
-    finalColor *= 0.85;
+    finalColor *= (float3)(1.0f) * pow(max(0.0f, min(1.0f, (1.0f - length(uv/2.5f)))), 2.0f);
+    finalColor *= 1.2f;
+    finalColor *= 0.85f;
 
 	//// output the final color with sqrt for "gamma correction"
-	//fragColor = vec4(sqrt(clamp(finalColor, 0.0, 1.0)),1.0);
+	//fragColor = vec4(sqrt(clamp(finalColor, 0.0f, 1.0f)),1.0f);
     
-    FuWriteImagef(dst, ipos, size, (float4)(finalColor, 1.0));
+    FuWriteImagef(dst, ipos, size, (float4)(finalColor, 1.0f));
 }
 ]]
 

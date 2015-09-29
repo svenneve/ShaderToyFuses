@@ -30,12 +30,12 @@ FuRegisterClass("hos_Squigly", CT_SourceTool, {
 clsource =
 [[
 
-#define Tau (2.*M_PI_F)
+#define Tau (2.f*M_PI_F)
 //Colors
-#define Color_BackGround (float3)( 34,  30,  38)/256.
-#define Color_Ring1      (float3)( 10, 205, 203)/256.
-#define Color_Ring2      (float3)( 46,  72,  82)/256.
-#define Color_Ring3      (float3)( 54, 147, 147)/256.
+#define Color_BackGround (float3)( 34.f,  30.f,  38.f)/256.f
+#define Color_Ring1      (float3)( 10.f, 205.f, 203.f)/256.f
+#define Color_Ring2      (float3)( 46.f,  72.f,  82.f)/256.f
+#define Color_Ring3      (float3)( 54.f, 147.f, 147.f)/256.f
 
 kernel void Squigly(FuWriteImage_t dst,
                             const int2 size,
@@ -46,12 +46,12 @@ kernel void Squigly(FuWriteImage_t dst,
     float2 iResolution = convert_float(size);
     
     //Scaling
-    float2 Scaled = (fragCoord*2.-iResolution)/iResolution.y*.6;
+    float2 Scaled = (fragCoord*2.f-iResolution)/iResolution.y*.6f;
     
     //Info
     float Length = length(Scaled);
     float Angle  = atan2(Scaled.y,Scaled.x)+M_PI_F;//[-Pi,Pi]->[0,2Pi]
-    float Wave = fmod(iGlobalTime*2.,Tau);//[0,2Pi]
+    float Wave = fmod(iGlobalTime*2.f,Tau);//[0,2Pi]
     
     //Background
     float3 Color = Color_BackGround;  
@@ -59,26 +59,26 @@ kernel void Squigly(FuWriteImage_t dst,
     //Calculating
     float AngleDifference = fabs(Wave-Angle);
     float DistanceToWave  = min(AngleDifference,Tau-AngleDifference);
-    float FinalMultiplier = pow(max(1.,DistanceToWave),-4.);
+    float FinalMultiplier = pow(max(1.f,DistanceToWave),-4.f);
     
-    float Ring1 = .50  + 0.03*cos(Angle*7.       )*FinalMultiplier;
-    float Ring2 = .485 + 0.03*cos(Angle*7.+Tau/3.)*FinalMultiplier;
-    float Ring3 = .47  + 0.03*cos(Angle*7.-Tau/3.)*FinalMultiplier;
+    float Ring1 = .50f  + 0.03f*cos(Angle*7.f        )*FinalMultiplier;
+    float Ring2 = .485f + 0.03f*cos(Angle*7.f+Tau/3.f)*FinalMultiplier;
+    float Ring3 = .47f  + 0.03f*cos(Angle*7.f-Tau/3.f)*FinalMultiplier;
     
     //Drawing
-    if(fabs(Ring3-Length)<.01){
+    if(fabs(Ring3-Length)<.01f){
         Color = Color_Ring3;
     }
-    if(fabs(Ring2-Length)<.01){
+    if(fabs(Ring2-Length)<.01f){
         Color = Color_Ring2;
     }
-    if(fabs(Ring1-Length)<.01){
+    if(fabs(Ring1-Length)<.01f){
         Color = Color_Ring1;
     }     
     
     //Final
-    //fragColor = (Color,1.0);
-    FuWriteImagef(dst, ipos, size, (float4)(Color,1.0));
+    //fragColor = (Color,1.0f);
+    FuWriteImagef(dst, ipos, size, (float4)(Color,1.0f));
 }
 ]]
 
