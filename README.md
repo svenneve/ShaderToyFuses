@@ -29,7 +29,9 @@ Link to ShaderToy images/textures for download and use in Fusion : http://shinyt
 System Requirements
 -------------------
 Eyeon Fusion 6.x - 7.x
+
 Black Magic Design Fusion 7.x - 8.x
+
 
 OpenCL 1.1 compatible device
 
