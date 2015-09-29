@@ -9,15 +9,19 @@ Unless stated otherwise ShaderToy shaders are licensed using the Creative Common
 Examples of what the shaders look like in Fusion using OpenCL:
 
 Squigly
+
 ![screen](http://i.imgur.com/3Hcy92R.gif)
 
 Nitrostatis
+
 ![screen](http://i.imgur.com/ncTEfL4.gif)
 
 Storm
+
 ![screen](http://i.imgur.com/C9kyTb6.gif)
 
 Combustible Voronoi
+
 ![screen](http://i.imgur.com/X5F24kA.gif)
 
 
