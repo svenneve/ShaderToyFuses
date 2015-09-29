@@ -2,7 +2,7 @@
 ---------------
 A collection of ShaderToy shaders converted to Fusion fuses.
 
-Most of the shaders are converted as best as possible (though they won't always match, mostly because i was too lazy to use image2d_t instead of FuReadImage)
+Most of the shaders are converted as best as possible (though they won't always match, mostly because i was too lazy to use image2d_t instead of FuSampleImage)
 I'll post an example using image2d_t with the sampler set repeating or mirror repeating.
 
 Examples of what the shaders look like in Fusion using OpenCL:
